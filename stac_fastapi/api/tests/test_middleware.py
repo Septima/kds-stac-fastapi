@@ -174,3 +174,16 @@ def test_cors_middleware(test_client):
     resp = test_client.get("/_mgmt/ping", headers={"Origin": "http://netloc"})
     assert resp.status_code == 200
     assert resp.headers["access-control-allow-origin"] == "*"
+
+
+def test_cors_allows_authorization_header(test_client):
+    resp = test_client.options(
+        "/collections",
+        headers={
+            "Origin": "http://netloc",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert resp.status_code == 200
+    assert "authorization" in resp.headers["access-control-allow-headers"].lower()

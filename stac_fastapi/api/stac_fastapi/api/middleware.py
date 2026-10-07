@@ -25,7 +25,7 @@ class CORSMiddleware(_CORSMiddleware):
             "POST",
             "GET",
         ),
-        allow_headers: typing.Sequence[str] = ("Content-Type",),
+        allow_headers: typing.Sequence[str] = ("Content-Type", "Authorization"),
         allow_credentials: bool = False,
         allow_origin_regex: typing.Optional[str] = None,
         expose_headers: typing.Sequence[str] = (),

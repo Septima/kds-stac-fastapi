@@ -15,6 +15,7 @@ install_requires = [
 ]
 
 extra_reqs = {
+    "oidc": ["PyJWT[crypto]==2.9.0"],
     "dev": [
         "httpx",
         "pytest",
@@ -30,6 +31,7 @@ extra_reqs = {
     "docs": ["mkdocs", "mkdocs-material", "pdocs"],
 }
 
+extra_reqs["dev"] += extra_reqs["oidc"]
 
 setup(
     name="stac-fastapi.api",
