@@ -8,12 +8,18 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+import stac_fastapi.api.oidc as oidc
 from stac_fastapi.api.oidc import OIDCTokenAuth
 from test_api import TestRouteDependencies as RouteDependencies
 
 
 @pytest.fixture
 def authenticated_app(monkeypatch):
+    monkeypatch.setattr(oidc, "PUBLIC_USER_PRODUCTS", {"demo-product"})
+    monkeypatch.setattr(
+        oidc, "DEFENCE_USER_PRODUCTS", {"demo-product", "defence-product"}
+    )
+    monkeypatch.setattr(oidc, "DEFENCE_PRODUCT", "defence-product")
     private_key = Ed25519PrivateKey.generate()
     auth = OIDCTokenAuth("https://issuer.example", "stac", "https://issuer.example/jwks")
     monkeypatch.setattr(
@@ -47,7 +53,7 @@ def token(private_key, **overrides):
         "sub": "demo-user",
         "iat": now,
         "exp": now + 300,
-        "hiddenProductSlugs": ["demo-product"],
+        "hiddenProductSlugs": ["defence-product"],
         **overrides,
     }
     return jwt.encode(claims, private_key, algorithm="EdDSA")
@@ -64,7 +70,10 @@ def test_missing_token_and_valid_token(authenticated_app, method):
             method, "/data", headers={"Authorization": f"Bearer {token(key)}"}
         )
         assert response.status_code == 200
-        assert response.json() == {"sub": "demo-user", "products": ["demo-product"]}
+        assert response.json() == {
+            "sub": "demo-user",
+            "products": ["defence-product", "demo-product"],
+        }
     data_route = next(route for route in app.routes if route.path == "/data")
     assert len(data_route.dependencies) == 1
 
@@ -146,6 +155,65 @@ def test_disallowed_algorithm(authenticated_app):
         ).status_code == 401
 
 
+@pytest.mark.parametrize("algorithm", ["HS256", "EdDSA"])
+def test_configured_algorithm(monkeypatch, algorithm):
+    monkeypatch.setattr(oidc, "PUBLIC_USER_PRODUCTS", {"demo-product"})
+    app = FastAPI()
+    if algorithm == "EdDSA":
+        signing_key = Ed25519PrivateKey.generate()
+        verification_key = signing_key.public_key()
+    else:
+        signing_key = verification_key = "configured-test-secret"
+    auth = OIDCTokenAuth(
+        "https://issuer.example",
+        "stac",
+        "https://issuer.example/jwks",
+        algorithms=[algorithm],
+    )
+    monkeypatch.setattr(
+        auth.jwks,
+        "get_signing_key_from_jwt",
+        lambda token: SimpleNamespace(key=verification_key),
+    )
+
+    @app.get("/data")
+    def data(request: Request):
+        return {"products": sorted(request.scope["allowed_products"])}
+
+    auth.install(app)
+    now = int(time.time())
+    encoded = jwt.encode(
+        {
+            "iss": "https://issuer.example",
+            "aud": "stac",
+            "sub": "demo-user",
+            "iat": now,
+            "exp": now + 300,
+            "hiddenProductSlugs": [],
+        },
+        signing_key,
+        algorithm=algorithm,
+    )
+    with TestClient(app) as client:
+        response = client.get("/data", headers={"Authorization": f"Bearer {encoded}"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "products": ["demo-product"],
+    }
+    assert auth.algorithms == (algorithm,)
+
+
+@pytest.mark.parametrize("algorithms", [(), ("",), ("  ",)])
+def test_empty_configured_algorithms_are_rejected(algorithms):
+    with pytest.raises(ValueError, match="JWT algorithm"):
+        OIDCTokenAuth(
+            "https://issuer.example",
+            "stac",
+            "https://issuer.example/jwks",
+            algorithms=algorithms,
+        )
+
+
 @pytest.mark.parametrize(
     "error,status",
     [
@@ -212,11 +280,16 @@ def test_late_routes_are_protected_on_reinstallation(authenticated_app):
 @pytest.mark.parametrize(
     "overrides,status,products",
     [
-        ({}, 200, []),
-        ({"hiddenProductSlugs": []}, 200, []),
-        ({"hiddenProductSlugs": ["demo-product", "demo-product"]}, 200, ["demo-product"]),
+        ({}, 200, ["demo-product"]),
+        ({"hiddenProductSlugs": []}, 200, ["demo-product"]),
+        (
+            {"hiddenProductSlugs": ["defence-product", "defence-product"]},
+            200,
+            ["defence-product", "demo-product"],
+        ),
+        ({"hiddenProductSlugs": ["unknown"]}, 403, None),
         ({"hiddenProductSlugs": None}, 403, None),
-        ({"hiddenProductSlugs": "demo-product"}, 403, None),
+        ({"hiddenProductSlugs": "defence-product"}, 403, None),
         ({"hiddenProductSlugs": [123]}, 403, None),
     ],
 )
