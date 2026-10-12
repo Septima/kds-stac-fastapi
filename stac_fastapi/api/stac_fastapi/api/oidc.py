@@ -1,7 +1,7 @@
 """Optional OIDC bearer authentication for any STAC API backend."""
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -12,6 +12,9 @@ from stac_fastapi.api.routes import add_route_dependencies
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False)
+PUBLIC_USER_PRODUCTS = {"skraafoto_fri", "skraafoto_pix"}
+DEFENCE_USER_PRODUCTS = {"skraafoto_fri", "skraafoto_forsvar"}
+DEFENCE_PRODUCT = "skraafoto_forsvar"
 
 
 class OIDCTokenAuth:
@@ -22,11 +25,17 @@ class OIDCTokenAuth:
         issuer: str,
         audience: str,
         jwks_url: str,
+        algorithms: Sequence[str] = ("EdDSA",),
     ):
         if not issuer or not audience or not jwks_url:
             raise ValueError("OIDC issuer, audience and JWKS URL are required")
+        if not algorithms or any(
+            not isinstance(value, str) or not value.strip() for value in algorithms
+        ):
+            raise ValueError("At least one non-empty JWT algorithm is required")
         self.issuer = issuer
         self.audience = audience
+        self.algorithms = tuple(value.strip() for value in algorithms)
         self.jwks = jwt.PyJWKClient(jwks_url, timeout=3)
 
     def __call__(
@@ -45,7 +54,7 @@ class OIDCTokenAuth:
             claims = jwt.decode(
                 credentials.credentials,
                 key,
-                algorithms=["EdDSA"],
+                algorithms=self.algorithms,
                 issuer=self.issuer,
                 audience=self.audience,
                 leeway=60,
@@ -70,7 +79,15 @@ class OIDCTokenAuth:
         ):
             logger.warning("Invalid OIDC product entitlement claims")
             raise HTTPException(status_code=403, detail="invalid product entitlements")
-        request.scope["allowed_products"] = set(products)
+        requested_products = set(products)
+        if requested_products - {DEFENCE_PRODUCT}:
+            logger.warning("Unknown OIDC product entitlement claims")
+            raise HTTPException(status_code=403, detail="invalid product entitlements")
+        request.scope["allowed_products"] = (
+            DEFENCE_USER_PRODUCTS
+            if DEFENCE_PRODUCT in requested_products
+            else PUBLIC_USER_PRODUCTS
+        )
         return claims
 
     def install(self, app: FastAPI) -> None:
