@@ -83,7 +83,9 @@ def TestCoreClient(collection_dict, item_dict):
             **kwargs,
         ) -> stac.ItemCollection:
             return stac.ItemCollection(
-                type="FeatureCollection", features=[stac.Item(**item_dict)]
+                type="FeatureCollection",
+                features=[stac.Item(**item_dict)],
+                links=[],
             )
 
         def get_item(self, item_id: str, collection_id: str, **kwargs) -> stac.Item:
@@ -112,7 +114,9 @@ def TestCoreClient(collection_dict, item_dict):
             **kwargs,
         ) -> stac.ItemCollection:
             return stac.ItemCollection(
-                type="FeatureCollection", features=[stac.Item(**item_dict)]
+                type="FeatureCollection",
+                features=[stac.Item(**item_dict)],
+                links=[],
             )
 
     return CoreClient
@@ -139,7 +143,9 @@ def AsyncTestCoreClient(collection_dict, item_dict):
             **kwargs,
         ) -> stac.ItemCollection:
             return stac.ItemCollection(
-                type="FeatureCollection", features=[stac.Item(**item_dict)]
+                type="FeatureCollection",
+                features=[stac.Item(**item_dict)],
+                links=[],
             )
 
         async def get_item(
@@ -170,7 +176,9 @@ def AsyncTestCoreClient(collection_dict, item_dict):
             **kwargs,
         ) -> stac.ItemCollection:
             return stac.ItemCollection(
-                type="FeatureCollection", features=[stac.Item(**item_dict)]
+                type="FeatureCollection",
+                features=[stac.Item(**item_dict)],
+                links=[],
             )
 
     return AsyncCoreClient

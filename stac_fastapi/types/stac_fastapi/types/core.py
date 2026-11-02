@@ -17,7 +17,7 @@ from stac_fastapi.types.config import ApiSettings
 from stac_fastapi.types.conformance import BASE_CONFORMANCE_CLASSES
 from stac_fastapi.types.extension import ApiExtension
 from stac_fastapi.types.links import BaseHrefBuilder
-# from stac_fastapi.types.requests import get_base_url
+from stac_fastapi.types.requests import get_base_url
 from stac_fastapi.types.rfc3339 import DateTimeType
 from stac_fastapi.types.search import BaseSearchPostRequest
 from stac_fastapi.types.stac import Conformance
@@ -464,7 +464,7 @@ class BaseCoreClient(LandingPageMixin, abc.ABC):
             BaseHrefBuilder which is used for constructing server hrefs used in responses.
         """
         request: Request = kwargs["request"]
-        base_url = str(request.base_url)
+        base_url = get_base_url(request)
         return BaseHrefBuilder(base_url)
 
     @abc.abstractmethod
@@ -661,7 +661,7 @@ class AsyncBaseCoreClient(LandingPageMixin, abc.ABC):
                 "type": "application/vnd.oai.openapi+json;version=3.0",
                 "title": "OpenAPI service description",
                 # "href": str(request.url_for("openapi")),
-                "href": hrefbuilder.build("/api"),
+                "href": hrefbuilder.build("api"),
             }
         )
 
@@ -672,7 +672,7 @@ class AsyncBaseCoreClient(LandingPageMixin, abc.ABC):
                 "type": "text/html",
                 "title": "OpenAPI service documentation",
                 # "href": str(request.url_for("swagger_ui_html")),
-                "href": hrefbuilder.build("/api.html"),
+                "href": hrefbuilder.build("api.html"),
             }
         )
 
@@ -688,14 +688,14 @@ class AsyncBaseCoreClient(LandingPageMixin, abc.ABC):
         """
         return Conformance(conformsTo=self.conformance_classes())
     
-    async def href_builder(self, **kwargs) -> BaseHrefBuilder:
+    def href_builder(self, **kwargs) -> BaseHrefBuilder:
         """Application href builder.
 
         Returns:
             BaseHrefBuilder which is used for constructing server hrefs used in responses.
         """
         request: Request = kwargs["request"]
-        base_url = str(request.base_url)
+        base_url = get_base_url(request)
         return BaseHrefBuilder(base_url)
 
     @abc.abstractmethod
